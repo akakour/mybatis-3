@@ -63,17 +63,57 @@ public class XMLScriptBuilder extends BaseBuilder {
     nodeHandlerMap.put("bind", new BindHandler());
   }
 
+  /**
+   * 解析 sql mapper
+   * @return
+   */
   public SqlSource parseScriptNode() {
+    /**
+     * 递归生成 sqlnode 树
+     */
     MixedSqlNode rootSqlNode = parseDynamicTags(context);
     SqlSource sqlSource;
     if (isDynamic) {
+      // 如果sql包含动态语句，比如<trim><if>${}等，就会被包装成动态dynamicSqlSource对象。
       sqlSource = new DynamicSqlSource(configuration, rootSqlNode);
     } else {
+      // 如果sql只是纯静态文本，将会直接被包装成RawSqlsource对象
       sqlSource = new RawSqlSource(configuration, rootSqlNode, parameterType);
     }
     return sqlSource;
   }
 
+  /**
+   * 递归生成 sqlnode 树状结构
+   * 1. MixedSqlNode是继承SqlNode的，里面有List<SqlNode>的content属性，存放了同一级结构的sqlnode
+   * 2. List<SqlNode>中的sqlnode也可以是miedsqlnode，接着也存放了同(次)一级的sqlnode。以此类推。最终是一个树状结构
+   * 3. 如果同一级的sqlnode中，有静态文本的，将会被包装成staticSqlnode。
+   * 例子：
+   *     <insert id="saveContracts" parameterType="java.util.List">
+   *         insert into consult_contract(psptId,contract_code,state,activeTime)
+   *         values
+   *         <foreach collection="list" item="item" index="index" separator=",">
+   *             (#{item.psptId},#{item.contractCode},#{item.state},#{item.activeTime})
+   *         </foreach>
+   *         <trim prefix="WHERE" prefixOverrides="AND|OR">
+   *             <if test="psptId != null and psptId != ''">
+   *                 and psptId = #{psptId,jdbcType=VARCHAR}
+   *             </if>
+   *             <if test="psptId != null and psptId != ''">
+   *                 and psptId = #{psptId,jdbcType=VARCHAR}
+   *             </if>
+   *         </trim>
+   *     </insert>
+   *   1. 一级：将会有一个mixedSqlnode对象，content里面存了三个sqlnode，
+   *            一个是'insert ... values'的静态staticsqlnode，一个是foreachsqlnode，一个是terimsqlnode
+   *   2. 二级：foreachsqlnode的content里面，存放了一个staticsqlnode。
+   *   3.      termsqlnode的content里面。存放了2个ifsqlnode（可能还有空的staticsqlnode）
+   *   4. 三级：ifsqlnode的content里面存了一个staticsqlnode。
+   *   5.如上，层层递归，树状结构。
+   *
+   * @param node
+   * @return
+   */
   protected MixedSqlNode parseDynamicTags(XNode node) {
     List<SqlNode> contents = new ArrayList<>();
     NodeList children = node.getNode().getChildNodes();

@@ -1,5 +1,5 @@
 /**
- *    Copyright 2009-2019 the original author or authors.
+ *    Copyright 2009-2021 the original author or authors.
  *
  *    Licensed under the Apache License, Version 2.0 (the "License");
  *    you may not use this file except in compliance with the License.
@@ -121,6 +121,10 @@ public class TypeAliasRegistry {
     }
   }
 
+  /**
+   * 扫packageName路劲下所有class文件，建立别名和类的映射关系
+   * @param packageName
+   */
   public void registerAliases(String packageName) {
     registerAliases(packageName, Object.class);
   }

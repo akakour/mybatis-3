@@ -1,5 +1,5 @@
 /**
- *    Copyright 2009-2019 the original author or authors.
+ *    Copyright 2009-2021 the original author or authors.
  *
  *    Licensed under the Apache License, Version 2.0 (the "License");
  *    you may not use this file except in compliance with the License.
@@ -388,6 +388,10 @@ public final class TypeHandlerRegistry {
 
   // Only handler type
 
+  /**
+   * 如果类有@MappedTypes注解，则注册成handlertype
+   * @param typeHandlerClass
+   */
   public void register(Class<?> typeHandlerClass) {
     boolean mappedTypeFound = false;
     MappedTypes mappedTypes = typeHandlerClass.getAnnotation(MappedTypes.class);
@@ -442,6 +446,10 @@ public final class TypeHandlerRegistry {
 
   // scan
 
+  /**
+   * 扫描packagename下面的所有有@MappedTypes注解的类，注册到大管家
+   * @param packageName
+   */
   public void register(String packageName) {
     ResolverUtil<Class<?>> resolverUtil = new ResolverUtil<>();
     resolverUtil.find(new ResolverUtil.IsA(TypeHandler.class), packageName);

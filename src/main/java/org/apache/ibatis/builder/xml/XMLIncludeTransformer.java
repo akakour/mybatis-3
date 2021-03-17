@@ -51,6 +51,7 @@ public class XMLIncludeTransformer {
   }
 
   /**
+   * 递归处理 incloud标签
    * Recursively apply includes through all SQL fragments.
    * @param source Include node in DOM tree
    * @param variablesContext Current context for static variables with values

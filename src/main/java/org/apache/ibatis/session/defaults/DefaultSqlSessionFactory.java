@@ -1,5 +1,5 @@
 /**
- *    Copyright 2009-2019 the original author or authors.
+ *    Copyright 2009-2021 the original author or authors.
  *
  *    Licensed under the Apache License, Version 2.0 (the "License");
  *    you may not use this file except in compliance with the License.
@@ -44,6 +44,7 @@ public class DefaultSqlSessionFactory implements SqlSessionFactory {
 
   @Override
   public SqlSession openSession() {
+    // 默认的sqlssession 一般生成默认的DefaultSqlSession
     return openSessionFromDataSource(configuration.getDefaultExecutorType(), null, false);
   }
 
@@ -87,13 +88,27 @@ public class DefaultSqlSessionFactory implements SqlSessionFactory {
     return configuration;
   }
 
+  /**
+   * 从sqlsessionfactory 生成 sqlsession
+   * @param execType
+   * @param level
+   * @param autoCommit
+   * @return
+   */
   private SqlSession openSessionFromDataSource(ExecutorType execType, TransactionIsolationLevel level, boolean autoCommit) {
     Transaction tx = null;
     try {
+      // 从大管家 获得env配置 env核心配置了datasource和transcationmanage属性，和数据源有关
       final Environment environment = configuration.getEnvironment();
+      // 创建事务工厂类 默认的是 ManagedTransactionFactory
       final TransactionFactory transactionFactory = getTransactionFactoryFromEnvironment(environment);
+      // 创建事务（数据源+自动提交）
       tx = transactionFactory.newTransaction(environment.getDataSource(), level, autoCommit);
+      /**
+       * 重要： 生成核心组件：执行器的拦截器（插件）代理对象 注意 是代理对象，因为有插件扩展
+       */
       final Executor executor = configuration.newExecutor(tx, execType);
+      // 默认从sqlsessionfactory中得到的sqlsession都是DefaultSqlSession
       return new DefaultSqlSession(configuration, executor, autoCommit);
     } catch (Exception e) {
       closeTransaction(tx); // may have fetched a connection so lets call close()
@@ -125,6 +140,20 @@ public class DefaultSqlSessionFactory implements SqlSessionFactory {
     }
   }
 
+  /**
+   * opensession的时候，创建事务工厂、事务类型是在config的env属性中配置的
+   * <environment id="test">
+   *             <transactionManager type="JDBC"/>
+   *             <dataSource type="POOLED">
+   *                 <property name="driver" value="${mybatis.druid.driver-class-name}"/>
+   *                 <property name="url" value="${mybatis.druid.url}"/>
+   *                 <property name="username" value="${mybatis.druid.username}"/>
+   *                 <property name="password" value="${mybatis.druid.password}"/>
+   *             </dataSource>
+   * </environment>
+   * @param environment
+   * @return
+   */
   private TransactionFactory getTransactionFactoryFromEnvironment(Environment environment) {
     if (environment == null || environment.getTransactionFactory() == null) {
       return new ManagedTransactionFactory();

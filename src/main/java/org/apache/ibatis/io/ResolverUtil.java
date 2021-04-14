@@ -1,5 +1,5 @@
 /**
- *    Copyright 2009-2019 the original author or authors.
+ *    Copyright 2009-2021 the original author or authors.
  *
  *    Licensed under the Apache License, Version 2.0 (the "License");
  *    you may not use this file except in compliance with the License.
@@ -217,9 +217,13 @@ public class ResolverUtil<T> {
     String path = getPackagePath(packageName);
 
     try {
+      // VFS的基本思路是 将path作为资源 列出其下所有文件、文件夹
       List<String> children = VFS.getInstance().list(path);
+      // 遍历所有文件，文件夹
       for (String child : children) {
+        // 去除非class文件
         if (child.endsWith(".class")) {
+          // 几乎是全匹配到matches容器中
           addIfMatching(test, child);
         }
       }
@@ -241,8 +245,7 @@ public class ResolverUtil<T> {
   }
 
   /**
-   * Add the class designated by the fully qualified class name provided to the set of
-   * resolved classes if and only if it is approved by the Test supplied.
+   * 且仅当由提供的测试批准时，才由提供给解析类集合的完全合格类名称指定的类。
    *
    * @param test the test used to determine if the class matches
    * @param fqn the fully qualified name of a class
@@ -257,6 +260,7 @@ public class ResolverUtil<T> {
       }
 
       Class<?> type = loader.loadClass(externalName);
+      // mybatis-config.xml形式下，test的matches就是简单匹配是否是Object.class的子类，一般全都是
       if (test.matches(type)) {
         matches.add((Class<T>) type);
       }

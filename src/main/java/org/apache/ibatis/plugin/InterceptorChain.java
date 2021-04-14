@@ -1,5 +1,5 @@
 /**
- *    Copyright 2009-2019 the original author or authors.
+ *    Copyright 2009-2021 the original author or authors.
  *
  *    Licensed under the Apache License, Version 2.0 (the "License");
  *    you may not use this file except in compliance with the License.
@@ -24,10 +24,17 @@ import java.util.List;
  */
 public class InterceptorChain {
 
+  // 拦截器（插件）链
   private final List<Interceptor> interceptors = new ArrayList<>();
 
+  /**
+   * 生成目标对象的代理对象
+   * @param target
+   * @return
+   */
   public Object pluginAll(Object target) {
     for (Interceptor interceptor : interceptors) {
+      // 用每一个拦截器去匹配 去增强 生成代理
       target = interceptor.plugin(target);
     }
     return target;

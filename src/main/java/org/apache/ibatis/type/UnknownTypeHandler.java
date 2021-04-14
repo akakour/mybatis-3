@@ -1,5 +1,5 @@
 /**
- *    Copyright 2009-2019 the original author or authors.
+ *    Copyright 2009-2021 the original author or authors.
  *
  *    Licensed under the Apache License, Version 2.0 (the "License");
  *    you may not use this file except in compliance with the License.
@@ -68,11 +68,20 @@ public class UnknownTypeHandler extends BaseTypeHandler<Object> {
     return cs.getObject(columnIndex);
   }
 
+  /**
+   * 解决ps的参数绑定所用的typehandler问题
+   *    入参和jdbctype推断
+   *
+   * @param parameter
+   * @param jdbcType
+   * @return
+   */
   private TypeHandler<?> resolveTypeHandler(Object parameter, JdbcType jdbcType) {
     TypeHandler<?> handler;
     if (parameter == null) {
       handler = OBJECT_TYPE_HANDLER;
     } else {
+      // 推断：从定义的一系列handler中刷选出和入参类型相同的，再根据jdbctype匹配出唯一的一个
       handler = typeHandlerRegistry.getTypeHandler(parameter.getClass(), jdbcType);
       // check if handler is null (issue #270)
       if (handler == null || handler instanceof UnknownTypeHandler) {

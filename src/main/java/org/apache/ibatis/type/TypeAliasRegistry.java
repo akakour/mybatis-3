@@ -133,24 +133,37 @@ public class TypeAliasRegistry {
     ResolverUtil<Class<?>> resolverUtil = new ResolverUtil<>();
     resolverUtil.find(new ResolverUtil.IsA(superType), packageName);
     Set<Class<? extends Class<?>>> typeSet = resolverUtil.getClasses();
+    // 找到packagename下面的所有类
     for (Class<?> type : typeSet) {
       // Ignore inner classes and interfaces (including package-info.java)
       // Skip also inner classes. See issue #6
+      // 非接口，非内部类
       if (!type.isAnonymousClass() && !type.isInterface() && !type.isMemberClass()) {
+        // 找Alias注解，将注解的内容（别名）和class建立映射关系
         registerAlias(type);
       }
     }
   }
 
+  /**
+   * 需要Alias，建立别名和类的映射
+   * @param type
+   */
   public void registerAlias(Class<?> type) {
     String alias = type.getSimpleName();
     Alias aliasAnnotation = type.getAnnotation(Alias.class);
     if (aliasAnnotation != null) {
       alias = aliasAnnotation.value();
     }
+    // 建立映射
     registerAlias(alias, type);
   }
 
+  /**
+   * 在COnfiguration大对象 建立映射
+   * @param alias
+   * @param value
+   */
   public void registerAlias(String alias, Class<?> value) {
     if (alias == null) {
       throw new TypeException("The parameter alias cannot be null");

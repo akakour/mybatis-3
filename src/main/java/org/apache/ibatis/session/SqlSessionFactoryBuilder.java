@@ -77,7 +77,7 @@ public class SqlSessionFactoryBuilder {
    * @param inputStream
    * @param environment
    * @param properties
-   * @return
+   * @return DefaultSqlSessionFactory 默认的sqlsessionfactory
    */
   public SqlSessionFactory build(InputStream inputStream, String environment, Properties properties) {
     try {

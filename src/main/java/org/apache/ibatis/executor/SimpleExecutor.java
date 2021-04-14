@@ -1,5 +1,5 @@
 /**
- *    Copyright 2009-2019 the original author or authors.
+ *    Copyright 2009-2021 the original author or authors.
  *
  *    Licensed under the Apache License, Version 2.0 (the "License");
  *    you may not use this file except in compliance with the License.
@@ -53,13 +53,35 @@ public class SimpleExecutor extends BaseExecutor {
     }
   }
 
+  /**
+   * 具体执行query查询
+   * @param ms
+   * @param parameter
+   * @param rowBounds
+   * @param resultHandler
+   * @param boundSql
+   * @param <E>
+   * @return
+   * @throws SQLException
+   */
   @Override
   public <E> List<E> doQuery(MappedStatement ms, Object parameter, RowBounds rowBounds, ResultHandler resultHandler, BoundSql boundSql) throws SQLException {
     Statement stmt = null;
     try {
       Configuration configuration = ms.getConfiguration();
+      /**
+       * 创建statement执行器
+       *  可能是代理的RoutingStatementHandler，可以写log
+       */
       StatementHandler handler = configuration.newStatementHandler(wrapper, ms, parameter, rowBounds, resultHandler, boundSql);
+      /**
+       * 预编译
+       * 绑定推断：入参类型+jdbc类型
+       */
       stmt = prepareStatement(handler, ms.getStatementLog());
+      /**
+       * 执行
+       */
       return handler.query(stmt, resultHandler);
     } finally {
       closeStatement(stmt);
@@ -80,10 +102,20 @@ public class SimpleExecutor extends BaseExecutor {
     return Collections.emptyList();
   }
 
+  /**
+   * 预编译
+   * @param handler
+   * @param statementLog
+   * @return
+   * @throws SQLException
+   */
   private Statement prepareStatement(StatementHandler handler, Log statementLog) throws SQLException {
     Statement stmt;
+    // 获取db真实连接对象
     Connection connection = getConnection(statementLog);
+    // 生成statement对象 prepare模式下生成的是preparestatement对象
     stmt = handler.prepare(connection, transaction.getTimeout());
+    // 参数绑定 ps.setXX(index,value)
     handler.parameterize(stmt);
     return stmt;
   }

@@ -1,5 +1,5 @@
 /**
- *    Copyright 2009-2019 the original author or authors.
+ *    Copyright 2009-2021 the original author or authors.
  *
  *    Licensed under the Apache License, Version 2.0 (the "License");
  *    you may not use this file except in compliance with the License.
@@ -70,9 +70,17 @@ public class DefaultSqlSession implements SqlSession {
     return this.selectOne(statement, null);
   }
 
+  /**
+   * 检索单条数据
+   * @param statement
+   * @param parameter
+   * @param <T>
+   * @return
+   */
   @Override
   public <T> T selectOne(String statement, Object parameter) {
     // Popular vote was to return null on 0 results and throw exception on too many.
+    // 如果结果条数大于1，将会异常
     List<T> list = this.selectList(statement, parameter);
     if (list.size() == 1) {
       return list.get(0);
@@ -135,15 +143,36 @@ public class DefaultSqlSession implements SqlSession {
     return this.selectList(statement, null);
   }
 
+  /**
+   * 检索多条结果
+   *     select for list
+   * @param statement
+   * @param parameter
+   * @param <E>
+   * @return
+   */
   @Override
   public <E> List<E> selectList(String statement, Object parameter) {
     return this.selectList(statement, parameter, RowBounds.DEFAULT);
   }
 
+  /**
+   * 检索多条数据
+   * @param statement
+   * @param parameter
+   * @param rowBounds
+   * @param <E>
+   * @return
+   */
   @Override
   public <E> List<E> selectList(String statement, Object parameter, RowBounds rowBounds) {
     try {
+      // 每个mapper接口的每个方法都会封装成mapperstatement对象 statement:namespace.标签id，也可以认为就是interface名.method名，解析的时候就是这么存的
       MappedStatement ms = configuration.getMappedStatement(statement);
+      /**
+       * 发起query查询
+       * 值得注意的是，这一步的MappedStatement中的sqlSource的boundsql还是带#{}的形式，需要先转成？。
+       */
       return executor.query(ms, wrapCollection(parameter), rowBounds, Executor.NO_RESULT_HANDLER);
     } catch (Exception e) {
       throw ExceptionFactory.wrapException("Error querying database.  Cause: " + e, e);
@@ -286,6 +315,12 @@ public class DefaultSqlSession implements SqlSession {
     return configuration;
   }
 
+  /**
+   *  得到mapper的代理对象 MapperProxy
+   * @param type
+   * @param <T>
+   * @return MapperProxy
+   */
   @Override
   public <T> T getMapper(Class<T> type) {
     return configuration.getMapper(type, this);

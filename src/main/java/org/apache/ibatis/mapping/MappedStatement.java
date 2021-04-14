@@ -1,5 +1,5 @@
 /**
- *    Copyright 2009-2019 the original author or authors.
+ *    Copyright 2009-2021 the original author or authors.
  *
  *    Licensed under the Apache License, Version 2.0 (the "License");
  *    you may not use this file except in compliance with the License.
@@ -293,10 +293,20 @@ public final class MappedStatement {
     return resultSets;
   }
 
+  /**
+   * 从 sqlsource的sql树形成带？的sql文
+   *
+   * @param parameterObject
+   * @return
+   */
   public BoundSql getBoundSql(Object parameterObject) {
+    /**
+     *  1. 根据实际入参，从sqlsource树动态生成ql文（boudsql，带？）,并且封装？和入参的映射
+      */
     BoundSql boundSql = sqlSource.getBoundSql(parameterObject);
     List<ParameterMapping> parameterMappings = boundSql.getParameterMappings();
     if (parameterMappings == null || parameterMappings.isEmpty()) {
+      // 生成新的boudsql
       boundSql = new BoundSql(configuration, boundSql.getSql(), parameterMap.getParameterMappings(), parameterObject);
     }
 

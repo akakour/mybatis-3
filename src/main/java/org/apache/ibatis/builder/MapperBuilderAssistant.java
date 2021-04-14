@@ -1,5 +1,5 @@
 /**
- *    Copyright 2009-2019 the original author or authors.
+ *    Copyright 2009-2021 the original author or authors.
  *
  *    Licensed under the Apache License, Version 2.0 (the "License");
  *    you may not use this file except in compliance with the License.
@@ -142,6 +142,16 @@ public class MapperBuilderAssistant extends BaseBuilder {
     return cache;
   }
 
+  /** 将一组
+   *     <parameterMap id="s" type="cn.xxx.pojo.ConsultConfigArea">
+   *         <parameter property="areaCode" javaType="String" jdbcType="VARCHAR" mode="IN"/>
+   *     </parameterMap>
+   *  封装成ParameterMap 存在configuration大管家中，key是id="s"
+   * @param id
+   * @param parameterClass
+   * @param parameterMappings
+   * @return
+   */
   public ParameterMap addParameterMap(String id, Class<?> parameterClass, List<ParameterMapping> parameterMappings) {
     id = applyCurrentNamespace(id, false);
     ParameterMap parameterMap = new ParameterMap.Builder(configuration, id, parameterClass, parameterMappings).build();
@@ -267,6 +277,7 @@ public class MapperBuilderAssistant extends BaseBuilder {
       throw new IncompleteElementException("Cache-ref not yet resolved");
     }
 
+    // id = namespace + method
     id = applyCurrentNamespace(id, false);
     boolean isSelect = sqlCommandType == SqlCommandType.SELECT;
 

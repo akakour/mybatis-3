@@ -1,5 +1,5 @@
 /**
- *    Copyright 2009-2019 the original author or authors.
+ *    Copyright 2009-2021 the original author or authors.
  *
  *    Licensed under the Apache License, Version 2.0 (the "License");
  *    you may not use this file except in compliance with the License.
@@ -24,10 +24,19 @@ public interface Interceptor {
 
   Object intercept(Invocation invocation) throws Throwable;
 
+  /**
+   * 默认的调用interceptor拦截器的warp方法进行代理包装
+   * @param target
+   * @return
+   */
   default Object plugin(Object target) {
     return Plugin.wrap(target, this);
   }
 
+  /**
+   * 可以重写方法 以便传入拦截器的参数配置
+   * @param properties
+   */
   default void setProperties(Properties properties) {
     // NOP
   }

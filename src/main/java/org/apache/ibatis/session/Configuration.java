@@ -1,5 +1,5 @@
 /**
- *    Copyright 2009-2019 the original author or authors.
+ *    Copyright 2009-2021 the original author or authors.
  *
  *    Licensed under the Apache License, Version 2.0 (the "License");
  *    you may not use this file except in compliance with the License.
@@ -588,8 +588,20 @@ public class Configuration {
     return resultSetHandler;
   }
 
+  /**
+   * 生成 组件：statement处理器
+   * @param executor
+   * @param mappedStatement
+   * @param parameterObject
+   * @param rowBounds
+   * @param resultHandler
+   * @param boundSql
+   * @return
+   */
   public StatementHandler newStatementHandler(Executor executor, MappedStatement mappedStatement, Object parameterObject, RowBounds rowBounds, ResultHandler resultHandler, BoundSql boundSql) {
+    // 生成statement的静态代理对象RoutingStatementHandler，对原statement做了log增强---》 mybatis中 prepare，parameter等sqllog的由来
     StatementHandler statementHandler = new RoutingStatementHandler(executor, mappedStatement, parameterObject, rowBounds, resultHandler, boundSql);
+    // 生成statement的插件代理。如果有插件，会生成Plugin的代理对象，最终调用会先调用Plugin的invoke方法。
     statementHandler = (StatementHandler) interceptorChain.pluginAll(statementHandler);
     return statementHandler;
   }
@@ -598,20 +610,34 @@ public class Configuration {
     return newExecutor(transaction, defaultExecutorType);
   }
 
+  /**
+   * 创建 执行器 组件
+   * @param transaction
+   * @param executorType
+   * @return
+   */
   public Executor newExecutor(Transaction transaction, ExecutorType executorType) {
     executorType = executorType == null ? defaultExecutorType : executorType;
     executorType = executorType == null ? ExecutorType.SIMPLE : executorType;
     Executor executor;
     if (ExecutorType.BATCH == executorType) {
+      // 生成批处理执行器
       executor = new BatchExecutor(this, transaction);
     } else if (ExecutorType.REUSE == executorType) {
+      // 生成可以重用的执行器
       executor = new ReuseExecutor(this, transaction);
     } else {
+      // 生成最基本的执行器（默认）
       executor = new SimpleExecutor(this, transaction);
     }
     if (cacheEnabled) {
+      // 生成带有缓存功能的执行器
       executor = new CachingExecutor(executor);
     }
+    /**
+     *  生成执行器的拦截器（插件）代理
+     *  如果有插件，实际生成的是Plugin的代理对象，直接看Plugin的invoke方法
+      */
     executor = (Executor) interceptorChain.pluginAll(executor);
     return executor;
   }

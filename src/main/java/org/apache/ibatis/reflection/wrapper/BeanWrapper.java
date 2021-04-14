@@ -1,5 +1,5 @@
 /**
- *    Copyright 2009-2017 the original author or authors.
+ *    Copyright 2009-2021 the original author or authors.
  *
  *    Licensed under the Apache License, Version 2.0 (the "License");
  *    you may not use this file except in compliance with the License.
@@ -50,12 +50,19 @@ public class BeanWrapper extends BaseWrapper {
     }
   }
 
+  /**
+   * 设置pojo属性
+   * @param prop
+   * @param value
+   */
   @Override
   public void set(PropertyTokenizer prop, Object value) {
     if (prop.getIndex() != null) {
       Object collection = resolveCollection(prop, object);
+      // 设置聚合属性
       setCollectionValue(prop, collection, value);
     } else {
+      // 设置普通属性
       setBeanProperty(prop, object, value);
     }
   }
@@ -172,11 +179,18 @@ public class BeanWrapper extends BaseWrapper {
     }
   }
 
+  /**
+   * 反射设置pojo属性
+   * @param prop
+   * @param object
+   * @param value
+   */
   private void setBeanProperty(PropertyTokenizer prop, Object object, Object value) {
     try {
       Invoker method = metaClass.getSetInvoker(prop.getName());
       Object[] params = {value};
       try {
+        // 反射
         method.invoke(object, params);
       } catch (Throwable t) {
         throw ExceptionUtil.unwrapThrowable(t);

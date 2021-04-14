@@ -1,5 +1,5 @@
 /**
- *    Copyright 2009-2019 the original author or authors.
+ *    Copyright 2009-2021 the original author or authors.
  *
  *    Licensed under the Apache License, Version 2.0 (the "License");
  *    you may not use this file except in compliance with the License.
@@ -65,11 +65,11 @@ public class XMLScriptBuilder extends BaseBuilder {
 
   /**
    * 解析 sql mapper
-   * @return
+   * @return 动态sqlsource或者纯静态的sqlsource
    */
   public SqlSource parseScriptNode() {
     /**
-     * 递归生成 sqlnode 树
+     * 递归生成 sqlnode 多叉树
      */
     MixedSqlNode rootSqlNode = parseDynamicTags(context);
     SqlSource sqlSource;
@@ -109,7 +109,7 @@ public class XMLScriptBuilder extends BaseBuilder {
    *   2. 二级：foreachsqlnode的content里面，存放了一个staticsqlnode。
    *   3.      termsqlnode的content里面。存放了2个ifsqlnode（可能还有空的staticsqlnode）
    *   4. 三级：ifsqlnode的content里面存了一个staticsqlnode。
-   *   5.如上，层层递归，树状结构。
+   *   5.如上，层层递归，多叉树状结构。
    *
    * @param node
    * @return
@@ -122,22 +122,31 @@ public class XMLScriptBuilder extends BaseBuilder {
       if (child.getNode().getNodeType() == Node.CDATA_SECTION_NODE || child.getNode().getNodeType() == Node.TEXT_NODE) {
         String data = child.getStringBody("");
         TextSqlNode textSqlNode = new TextSqlNode(data);
+        // 查看是否是动态sql 本质就是看有没有${xxx}
         if (textSqlNode.isDynamic()) {
           contents.add(textSqlNode);
           isDynamic = true;
         } else {
+          // 非动态sql，直接创建为StaticTextSqlNode
           contents.add(new StaticTextSqlNode(data));
         }
       } else if (child.getNode().getNodeType() == Node.ELEMENT_NODE) { // issue #628
         String nodeName = child.getNode().getNodeName();
+        // nodeHandlerMap包括不限于 <trim> <where> <if> <set>,<foreach>等
         NodeHandler handler = nodeHandlerMap.get(nodeName);
         if (handler == null) {
           throw new BuilderException("Unknown element <" + nodeName + "> in SQL statement.");
         }
+        /**
+         * 动态sql标签的解析，由策略模式交给各自去处理。
+         */
         handler.handleNode(child, contents);
         isDynamic = true;
       }
     }
+    /**
+     * 最终会形成一颗多叉树
+     */
     return new MixedSqlNode(contents);
   }
 
@@ -164,14 +173,25 @@ public class XMLScriptBuilder extends BaseBuilder {
       // Prevent Synthetic Access
     }
 
+    /**
+     * <trim/>标签的解析
+     * @param nodeToHandle
+     * @param targetContents
+     */
     @Override
     public void handleNode(XNode nodeToHandle, List<SqlNode> targetContents) {
+      /**
+       * 递归调用parseDynamicTags主解析方法。 妙啊！！
+       * 核心的是 MixedSQlNode里面有一个contents属性，是个sqlNode List,里面存放了trim标签的子标签的解析内容
+       */
       MixedSqlNode mixedSqlNode = parseDynamicTags(nodeToHandle);
       String prefix = nodeToHandle.getStringAttribute("prefix");
       String prefixOverrides = nodeToHandle.getStringAttribute("prefixOverrides");
       String suffix = nodeToHandle.getStringAttribute("suffix");
       String suffixOverrides = nodeToHandle.getStringAttribute("suffixOverrides");
+      // 生成trim的sqlNode。
       TrimSqlNode trim = new TrimSqlNode(configuration, mixedSqlNode, prefix, prefixOverrides, suffix, suffixOverrides);
+      // 注意的是，这里的targetContents是trim标签的父标签的属性。存放的是和tim标签同级的sqlNode。
       targetContents.add(trim);
     }
   }
@@ -207,8 +227,14 @@ public class XMLScriptBuilder extends BaseBuilder {
       // Prevent Synthetic Access
     }
 
+    /**
+     * <foreach>标签的解析
+     * @param nodeToHandle
+     * @param targetContents
+     */
     @Override
     public void handleNode(XNode nodeToHandle, List<SqlNode> targetContents) {
+      // 回调
       MixedSqlNode mixedSqlNode = parseDynamicTags(nodeToHandle);
       String collection = nodeToHandle.getStringAttribute("collection");
       String item = nodeToHandle.getStringAttribute("item");

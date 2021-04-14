@@ -1,5 +1,5 @@
 /**
- *    Copyright 2009-2019 the original author or authors.
+ *    Copyright 2009-2021 the original author or authors.
  *
  *    Licensed under the Apache License, Version 2.0 (the "License");
  *    you may not use this file except in compliance with the License.
@@ -42,18 +42,32 @@ public class MapperProxy<T> implements InvocationHandler, Serializable {
     this.methodCache = methodCache;
   }
 
+  /**
+   * 每次执行 mapper的接口方法 都会调用到MapperProxy的invoke
+   * @param proxy 目标类
+   * @param method 方法
+   * @param args 入参
+   * @return
+   * @throws Throwable
+   */
   @Override
   public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
     try {
+      //1.  object固有方法--》 直接执行
       if (Object.class.equals(method.getDeclaringClass())) {
         return method.invoke(this, args);
       } else if (method.isDefault()) {
+        //2.  如果是非接口类型的方法 原方法
         return invokeDefaultMethod(proxy, method, args);
       }
     } catch (Throwable t) {
       throw ExceptionUtil.unwrapThrowable(t);
     }
+    // 一般 mapper接口会走到这里。 封装method为MapperMethod对象，含有接口和方法以及configuration大管家
     final MapperMethod mapperMethod = cachedMapperMethod(method);
+    /**
+     * 3.  执行具体的mybatis crud逻辑
+     */
     return mapperMethod.execute(sqlSession, args);
   }
 

@@ -1,5 +1,5 @@
 /**
- *    Copyright 2009-2019 the original author or authors.
+ *    Copyright 2009-2021 the original author or authors.
  *
  *    Licensed under the Apache License, Version 2.0 (the "License");
  *    you may not use this file except in compliance with the License.
@@ -54,35 +54,61 @@ public class MapperMethod {
     this.method = new MethodSignature(config, mapperInterface, method);
   }
 
+  /**
+   * 具体的CRUD 执行sql
+   * @param sqlSession
+   * @param args 入数
+   * @return
+   */
   public Object execute(SqlSession sqlSession, Object[] args) {
     Object result;
     switch (command.getType()) {
+      /**
+       * insert 标签
+       */
       case INSERT: {
         Object param = method.convertArgsToSqlCommandParam(args);
         result = rowCountResult(sqlSession.insert(command.getName(), param));
         break;
       }
+      /**
+       * update 标签
+       */
       case UPDATE: {
         Object param = method.convertArgsToSqlCommandParam(args);
         result = rowCountResult(sqlSession.update(command.getName(), param));
         break;
       }
+      /**
+       *  delete标签
+       */
       case DELETE: {
         Object param = method.convertArgsToSqlCommandParam(args);
         result = rowCountResult(sqlSession.delete(command.getName(), param));
         break;
       }
+      /**
+       *  select 标签
+       */
       case SELECT:
         if (method.returnsVoid() && method.hasResultHandler()) {
+          // 入参里面带有resultHandler接口的，这种很少用，是完全手动接手result处理
           executeWithResultHandler(sqlSession, args);
           result = null;
         } else if (method.returnsMany()) {
+          /**
+           * select 结果list类型，这种为常用
+           */
           result = executeForMany(sqlSession, args);
         } else if (method.returnsMap()) {
+          // select结果 map类型
           result = executeForMap(sqlSession, args);
         } else if (method.returnsCursor()) {
           result = executeForCursor(sqlSession, args);
         } else {
+          /**
+           *  select 单条数据
+           */
           Object param = method.convertArgsToSqlCommandParam(args);
           result = sqlSession.selectOne(command.getName(), param);
           if (method.returnsOptional()
@@ -91,6 +117,9 @@ public class MapperMethod {
           }
         }
         break;
+      /**
+       *  flush 指令
+       */
       case FLUSH:
         result = sqlSession.flushStatements();
         break;
@@ -137,15 +166,32 @@ public class MapperMethod {
     }
   }
 
+  /**
+   * 多结果返回的sql执行
+   *            select for list
+   * @param sqlSession
+   * @param args
+   * @param <E>
+   * @return
+   */
   private <E> Object executeForMany(SqlSession sqlSession, Object[] args) {
     List<E> result;
+    // param是形参与实参的map
     Object param = method.convertArgsToSqlCommandParam(args);
+    // 方法入参有带RowBound 基于内存分页，不常用
     if (method.hasRowBounds()) {
       RowBounds rowBounds = method.extractRowBounds(args);
       result = sqlSession.selectList(command.getName(), param, rowBounds);
     } else {
+      /**
+       * 检索，得到结果
+       *  注意的是，这里 生成了mybatis的 statement，paramtypehandler，resultsethandler三个组件，比较深
+       *   涉及到的设计模式主要是 策略模式：
+       *     1. prepareStatement.setXXX(1, XXX)中，这个setXXX是哪种（setString,setInteage。。）是根据入参jdbctype去推断的
+       */
       result = sqlSession.selectList(command.getName(), param);
     }
+    // 根据方法返回类型，进行返回值封装
     // issue #510 Collections & arrays support
     if (!method.getReturnType().isAssignableFrom(result.getClass())) {
       if (method.getReturnType().isArray()) {

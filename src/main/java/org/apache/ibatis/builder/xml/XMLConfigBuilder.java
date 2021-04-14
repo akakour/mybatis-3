@@ -99,13 +99,13 @@ public class XMLConfigBuilder extends BaseBuilder {
       throw new BuilderException("Each XMLConfigBuilder can only be used once.");
     }
     parsed = true;
-    // 解析xml
+    // 解析mybatis xml配置文件
     parseConfiguration(parser.evalNode("/configuration"));
     return configuration;
   }
 
   /**
-   * 从xml中解析Configuration大对象
+   * 从xml中解析Configuration标签
    * @param root
    */
   private void parseConfiguration(XNode root) {
@@ -141,7 +141,7 @@ public class XMLConfigBuilder extends BaseBuilder {
       //10. 解析typerhandler标签
       typeHandlerElement(root.evalNode("typeHandlers"));
       /**
-       * 11。 解析mappers标签
+       *  重点 11。 解析mappers标签
        */
       mapperElement(root.evalNode("mappers"));
     } catch (Exception e) {
@@ -480,9 +480,10 @@ public class XMLConfigBuilder extends BaseBuilder {
         //    <mappers>
         //        <package name="cn.xxx.dao"/>
         //    </mappers>
-        // 包扫描形式似乎需要xml和interface接口类在同一个文件夹下面，要是xml在resource文件夹下，似乎会报错找不到
+        // 包扫描形式需要xml和interface接口类在同一个文件夹下面，要是xml在resource文件夹下，似乎会报错找不到
         if ("package".equals(child.getName())) {
           String mapperPackage = child.getStringAttribute("name");
+          // 将mapper接口注册到大管家的mapperRegistry属性中。
           configuration.addMappers(mapperPackage);
         } else {
           //2. 直接配置形式

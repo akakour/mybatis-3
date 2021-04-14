@@ -101,6 +101,7 @@ public class XMLMapperBuilder extends BaseBuilder {
       configurationElement(parser.evalNode("/mapper"));
       // 标记已经加载过了
       configuration.addLoadedResource(resource);
+      // 建立从namespace到class的映射
       bindMapperForNamespace();
     }
 
@@ -114,7 +115,7 @@ public class XMLMapperBuilder extends BaseBuilder {
   }
 
   /**
-   * 解析mapper.xml
+   * 解析mapper.xml的mapper标签
    * @param context
    */
   private void configurationElement(XNode context) {
@@ -124,16 +125,11 @@ public class XMLMapperBuilder extends BaseBuilder {
       if (namespace == null || namespace.equals("")) {
         throw new BuilderException("Mapper's namespace cannot be empty");
       }
-      //设置当前正在加载的namespace
+      //设置当前正在加载的namespace,
       builderAssistant.setCurrentNamespace(namespace);
       // 2. 解析cache-ref标签
       cacheRefElement(context.evalNode("cache-ref"));
-      // 3. 解析cache 标签: 配置二级缓存实现类。
-      //<cache type="cn.xxx.cache.CaffeineCache" //public class CaffeineCache implements Cache：可以自己管理二级缓存
-      //           size="1024"
-      //           eviction="LRU"
-      //           flushInterval="120000"
-      //           readOnly="true"/>
+      // 3. 解析cache 标签: 配置当前二级缓存实现类。
       cacheElement(context.evalNode("cache"));
       // 4. 解析parameterMap 标签
       parameterMapElement(context.evalNodes("/mapper/parameterMap"));
@@ -155,6 +151,7 @@ public class XMLMapperBuilder extends BaseBuilder {
    * @param list
    */
   private void buildStatementFromContext(List<XNode> list) {
+    // 分环境来过滤
     if (configuration.getDatabaseId() != null) {
       buildStatementFromContext(list, configuration.getDatabaseId());
     }
@@ -224,6 +221,12 @@ public class XMLMapperBuilder extends BaseBuilder {
     }
   }
 
+  /**
+   * 解析 cache-ref标签
+   * <cache-ref namespace="com.someone.application.data.SomeMapper"/> namespace是必须的
+   * 这样可以在本mapper.xml使用SomeMapper.xml对应的缓存
+   * @param context
+   */
   private void cacheRefElement(XNode context) {
     if (context != null) {
       configuration.addCacheRef(builderAssistant.getCurrentNamespace(), context.getStringAttribute("namespace"));
@@ -256,7 +259,7 @@ public class XMLMapperBuilder extends BaseBuilder {
       boolean readWrite = !context.getBooleanAttribute("readOnly", false);
       boolean blocking = context.getBooleanAttribute("blocking", false);
       Properties props = context.getChildrenAsProperties();
-      // 创建缓存实现类
+      // 会重建本mapper.xml的二级缓存实现类
       builderAssistant.useNewCache(typeClass, evictionClass, flushInterval, size, readWrite, blocking, props);
     }
   }
@@ -266,12 +269,15 @@ public class XMLMapperBuilder extends BaseBuilder {
    *     <parameterMap id="s" type="cn.xxx.pojo.ConsultConfigArea">
    *         <parameter property="areaCode" javaType="String" jdbcType="VARCHAR" mode="IN"/>
    *     </parameterMap>
+   *  重点是 每一个paramater会封装成parameterMapping对象，多个组成parameterMappings对象
+   *  最终封装成ParameterMap放在configuration大管家中，key是 id，value是ParameterMap
    * @param list
    */
   private void parameterMapElement(List<XNode> list) {
     for (XNode parameterMapNode : list) {
       String id = parameterMapNode.getStringAttribute("id");
       String type = parameterMapNode.getStringAttribute("type");
+      // 如果是别名配置，通过别名拿到对应的class对象
       Class<?> parameterClass = resolveClass(type);
       List<XNode> parameterNodes = parameterMapNode.evalNodes("parameter");
       List<ParameterMapping> parameterMappings = new ArrayList<>();
@@ -283,9 +289,13 @@ public class XMLMapperBuilder extends BaseBuilder {
         String mode = parameterNode.getStringAttribute("mode");
         String typeHandler = parameterNode.getStringAttribute("typeHandler");
         Integer numericScale = parameterNode.getIntAttribute("numericScale");
+        //  mode = IN,OUT,INOUT之一
         ParameterMode modeEnum = resolveParameterMode(mode);
+        // 别名拿javatype对应的class对象
         Class<?> javaTypeClass = resolveClass(javaType);
+        // 解析得到jdbctype，固定的几种
         JdbcType jdbcTypeEnum = resolveJdbcType(jdbcType);
+        // 还是别名拿typehandler
         Class<? extends TypeHandler<?>> typeHandlerClass = resolveClass(typeHandler);
         // 每一个parameter组装成一个ParameterMapping对象。
         ParameterMapping parameterMapping = builderAssistant.buildParameterMapping(parameterClass, property, javaTypeClass, jdbcTypeEnum, resultMap, modeEnum, typeHandlerClass, numericScale);
@@ -351,6 +361,7 @@ public class XMLMapperBuilder extends BaseBuilder {
     List<ResultMapping> resultMappings = new ArrayList<>();
     resultMappings.addAll(additionalResultMappings);
     List<XNode> resultChildren = resultMapNode.getChildren();
+    // 解析<result/> 子标签
     for (XNode resultChild : resultChildren) {
       if ("constructor".equals(resultChild.getName())) {
         processConstructorElement(resultChild, typeClass, resultMappings);
@@ -472,7 +483,8 @@ public class XMLMapperBuilder extends BaseBuilder {
   }
 
   /**
-   * 组装resultmapping
+   * 组装ResultMapping
+   *  注意聚合标签
    * @param context
    * @param resultType
    * @param flags
@@ -491,6 +503,7 @@ public class XMLMapperBuilder extends BaseBuilder {
     String jdbcType = context.getStringAttribute("jdbcType");
     String nestedSelect = context.getStringAttribute("select");
     String nestedResultMap = context.getStringAttribute("resultMap",
+      // 处理嵌套结果集映射
       processNestedResultMappings(context, Collections.emptyList(), resultType));
     String notNullColumn = context.getStringAttribute("notNullColumn");
     String columnPrefix = context.getStringAttribute("columnPrefix");
@@ -504,6 +517,14 @@ public class XMLMapperBuilder extends BaseBuilder {
     return builderAssistant.buildResultMapping(resultType, property, column, javaTypeClass, jdbcTypeEnum, nestedSelect, nestedResultMap, notNullColumn, columnPrefix, typeHandlerClass, flags, resultSet, foreignColumn, lazy);
   }
 
+  /**
+   *  处理嵌套结果集映射
+   * @param context
+   * @param resultMappings
+   * @param enclosingType
+   * @return
+   * @throws Exception
+   */
   private String processNestedResultMappings(XNode context, List<ResultMapping> resultMappings, Class<?> enclosingType) throws Exception {
     if ("association".equals(context.getName())
       || "collection".equals(context.getName())

@@ -1,5 +1,5 @@
 /**
- *    Copyright 2009-2016 the original author or authors.
+ *    Copyright 2009-2021 the original author or authors.
  *
  *    Licensed under the Apache License, Version 2.0 (the "License");
  *    you may not use this file except in compliance with the License.
@@ -80,13 +80,23 @@ public abstract class BaseStatementHandler implements StatementHandler {
     return parameterHandler;
   }
 
+  /**
+   * 准备statement对象
+   * @param connection
+   * @param transactionTimeout
+   * @return
+   * @throws SQLException
+   */
   @Override
   public Statement prepare(Connection connection, Integer transactionTimeout) throws SQLException {
     ErrorContext.instance().sql(boundSql.getSql());
     Statement statement = null;
     try {
+      // 分mode (一般都是Prepare) 来初始化statement
       statement = instantiateStatement(connection);
+      // 配置timeout
       setStatementTimeout(statement, transactionTimeout);
+      // 配置fetchsize
       setFetchSize(statement);
       return statement;
     } catch (SQLException e) {

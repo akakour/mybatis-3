@@ -1,5 +1,5 @@
 /**
- *    Copyright 2009-2019 the original author or authors.
+ *    Copyright 2009-2021 the original author or authors.
  *
  *    Licensed under the Apache License, Version 2.0 (the "License");
  *    you may not use this file except in compliance with the License.
@@ -174,9 +174,13 @@ public class DefaultResultSetHandler implements ResultSetHandler {
     }
   }
 
-  //
-  // HANDLE RESULT SETS
-  //
+
+  /**
+   * 结果集设定
+   * @param stmt
+   * @return
+   * @throws SQLException
+   */
   @Override
   public List<Object> handleResultSets(Statement stmt) throws SQLException {
     ErrorContext.instance().activity("handling results").object(mappedStatement.getId());
@@ -184,14 +188,21 @@ public class DefaultResultSetHandler implements ResultSetHandler {
     final List<Object> multipleResults = new ArrayList<>();
 
     int resultSetCount = 0;
+    // 得到第一条resultset，用于判定用
     ResultSetWrapper rsw = getFirstResultSet(stmt);
 
+    //获取resultmap
     List<ResultMap> resultMaps = mappedStatement.getResultMaps();
     int resultMapCount = resultMaps.size();
     validateResultMapsCount(rsw, resultMapCount);
+    // 处理resultset
     while (rsw != null && resultMapCount > resultSetCount) {
       ResultMap resultMap = resultMaps.get(resultSetCount);
+      /**
+       * 处理resultmap映射，结果存入multipleResults
+       */
       handleResultSet(rsw, resultMap, multipleResults, null);
+      // 多条resultset的时候，处理下一条结果，一般见于存储过程
       rsw = getNextResultSet(stmt);
       cleanUpAfterHandlingResultSet();
       resultSetCount++;
@@ -291,13 +302,27 @@ public class DefaultResultSetHandler implements ResultSetHandler {
     }
   }
 
+  /**
+   * 处理resultset得到查询结果列表
+   * @param rsw resultset
+   * @param resultMap 结果映射
+   * @param multipleResults 查询结果列表
+   * @param parentMapping
+   * @throws SQLException
+   */
   private void handleResultSet(ResultSetWrapper rsw, ResultMap resultMap, List<Object> multipleResults, ResultMapping parentMapping) throws SQLException {
     try {
       if (parentMapping != null) {
         handleRowValues(rsw, resultMap, null, RowBounds.DEFAULT, parentMapping);
       } else {
         if (resultHandler == null) {
+          /**
+           * 一般没有聚合操作的直接处理成pojo
+           */
           DefaultResultHandler defaultResultHandler = new DefaultResultHandler(objectFactory);
+          /**
+           * 用默认的处理器处理 defaultResultHandler中的resultlist列表最终存放pojo对象
+           */
           handleRowValues(rsw, resultMap, defaultResultHandler, rowBounds, null);
           multipleResults.add(defaultResultHandler.getResultList());
         } else {
@@ -319,12 +344,23 @@ public class DefaultResultSetHandler implements ResultSetHandler {
   // HANDLE ROWS FOR SIMPLE RESULTMAP
   //
 
+  /**
+   *  处理简易的resultset pojo映射
+   * @param rsw
+   * @param resultMap
+   * @param resultHandler
+   * @param rowBounds
+   * @param parentMapping
+   * @throws SQLException
+   */
   public void handleRowValues(ResultSetWrapper rsw, ResultMap resultMap, ResultHandler<?> resultHandler, RowBounds rowBounds, ResultMapping parentMapping) throws SQLException {
+    // 处理嵌套结果 collocation之类的
     if (resultMap.hasNestedResultMaps()) {
       ensureNoRowBounds();
       checkResultHandler();
       handleRowValuesForNestedResultMap(rsw, resultMap, resultHandler, rowBounds, parentMapping);
     } else {
+      // 直接处理成pojo
       handleRowValuesForSimpleResultMap(rsw, resultMap, resultHandler, rowBounds, parentMapping);
     }
   }
@@ -344,29 +380,64 @@ public class DefaultResultSetHandler implements ResultSetHandler {
     }
   }
 
+  /**
+   * 将resultset 转化成 pojo
+   * @param rsw
+   * @param resultMap
+   * @param resultHandler
+   * @param rowBounds
+   * @param parentMapping
+   * @throws SQLException
+   */
   private void handleRowValuesForSimpleResultMap(ResultSetWrapper rsw, ResultMap resultMap, ResultHandler<?> resultHandler, RowBounds rowBounds, ResultMapping parentMapping)
       throws SQLException {
     DefaultResultContext<Object> resultContext = new DefaultResultContext<>();
+    // 获取jdbc的resultset对象
     ResultSet resultSet = rsw.getResultSet();
+    // 基于rowbound的内存分页
     skipRows(resultSet, rowBounds);
+    // 遍历循环resultset，得到多条结果（pojo）
     while (shouldProcessMoreRows(resultContext, rowBounds) && !resultSet.isClosed() && resultSet.next()) {
+      // 判断最终的resultmap，一般就是传入的resultmap
       ResultMap discriminatedResultMap = resolveDiscriminatedResultMap(resultSet, resultMap, null);
+      /**
+       * 反射 从resultset --》 resultmap的type（pojo）
+       */
       Object rowValue = getRowValue(rsw, discriminatedResultMap, null);
+      // 将单条检索数据结果（resultContext中的resultObject->pojo存到DefaultResultHandler的list中）
       storeObject(resultHandler, resultContext, rowValue, parentMapping, resultSet);
     }
   }
 
+  /**
+   * 将 pojo 存到结果列表中
+   * @param resultHandler
+   * @param resultContext
+   * @param rowValue
+   * @param parentMapping
+   * @param rs
+   * @throws SQLException
+   */
   private void storeObject(ResultHandler<?> resultHandler, DefaultResultContext<Object> resultContext, Object rowValue, ResultMapping parentMapping, ResultSet rs) throws SQLException {
     if (parentMapping != null) {
       linkToParents(rs, parentMapping, rowValue);
     } else {
+      // 调用resultHandler处理pojo，默认的DefaultResultHandler就是将pojo缓存到结果list中。
       callResultHandler(resultHandler, resultContext, rowValue);
     }
   }
 
+  /**
+   *  回调 resultHandler
+   * @param resultHandler
+   * @param resultContext
+   * @param rowValue
+   */
   @SuppressWarnings("unchecked" /* because ResultHandler<?> is always ResultHandler<Object>*/)
   private void callResultHandler(ResultHandler<?> resultHandler, DefaultResultContext<Object> resultContext, Object rowValue) {
+    // 记录条数+1 ，封装rowValue（pojo）到resultContext上下文
     resultContext.nextResultObject(rowValue);
+    // 从resultContext上下文拿到rowValue 进行result处理，基本默认的就是pojo直接存入结果list
     ((ResultHandler<Object>) resultHandler).handleResult(resultContext);
   }
 
@@ -392,15 +463,33 @@ public class DefaultResultSetHandler implements ResultSetHandler {
   // GET VALUE FROM ROW FOR SIMPLE RESULT MAP
   //
 
+  /**
+   * 根据 resultset的值 和resultmap的pojo class得到最终pojo
+   * @param rsw
+   * @param resultMap
+   * @param columnPrefix
+   * @return
+   * @throws SQLException
+   */
   private Object getRowValue(ResultSetWrapper rsw, ResultMap resultMap, String columnPrefix) throws SQLException {
     final ResultLoaderMap lazyLoader = new ResultLoaderMap();
+    /**
+     * 核心，这里如果是懒加载的话，会生成pojo的代理类，只有在子查询值被get的时候，会触发真正的子查询。
+     */
     Object rowValue = createResultObject(rsw, resultMap, lazyLoader, columnPrefix);
     if (rowValue != null && !hasTypeHandlerForResultObject(rsw, resultMap.getType())) {
+      // 将实例化完的pojo封装成metaObject对象。
       final MetaObject metaObject = configuration.newMetaObject(rowValue);
       boolean foundValues = this.useConstructorMappings;
       if (shouldApplyAutomaticMappings(resultMap, false)) {
+        /**
+         * 自动映射
+         */
         foundValues = applyAutomaticMappings(rsw, resultMap, metaObject, columnPrefix) || foundValues;
       }
+      /**
+       * 非自动映射的场合
+       */
       foundValues = applyPropertyMappings(rsw, resultMap, metaObject, lazyLoader, columnPrefix) || foundValues;
       foundValues = lazyLoader.size() > 0 || foundValues;
       rowValue = foundValues || configuration.isReturnInstanceForEmptyRow() ? rowValue : null;
@@ -424,12 +513,24 @@ public class DefaultResultSetHandler implements ResultSetHandler {
   // PROPERTY MAPPINGS
   //
 
+  /**
+   * 填充pojo属性
+   * @param rsw
+   * @param resultMap
+   * @param metaObject
+   * @param lazyLoader
+   * @param columnPrefix
+   * @return
+   * @throws SQLException
+   */
   private boolean applyPropertyMappings(ResultSetWrapper rsw, ResultMap resultMap, MetaObject metaObject, ResultLoaderMap lazyLoader, String columnPrefix)
       throws SQLException {
     final List<String> mappedColumnNames = rsw.getMappedColumnNames(resultMap, columnPrefix);
     boolean foundValues = false;
     final List<ResultMapping> propertyMappings = resultMap.getPropertyResultMappings();
+    // 遍历reslutmap的每一个映射属性
     for (ResultMapping propertyMapping : propertyMappings) {
+      // 获取db字段名
       String column = prependPrefix(propertyMapping.getColumn(), columnPrefix);
       if (propertyMapping.getNestedResultMapId() != null) {
         // the user added a column attribute to a nested result map, ignore it
@@ -438,6 +539,9 @@ public class DefaultResultSetHandler implements ResultSetHandler {
       if (propertyMapping.isCompositeResult()
           || (column != null && mappedColumnNames.contains(column.toUpperCase(Locale.ENGLISH)))
           || propertyMapping.getResultSet() != null) {
+        /**
+         * resultset 获取db字段值
+         */
         Object value = getPropertyMappingValue(rsw.getResultSet(), metaObject, propertyMapping, lazyLoader, columnPrefix);
         // issue #541 make property optional
         final String property = propertyMapping.getProperty();
@@ -452,6 +556,9 @@ public class DefaultResultSetHandler implements ResultSetHandler {
         }
         if (value != null || (configuration.isCallSettersOnNulls() && !metaObject.getSetterType(property).isPrimitive())) {
           // gcode issue #377, call setter on nulls (value is not 'found')
+          /**
+           * 给pojo设值
+           */
           metaObject.setValue(property, value);
         }
       }
@@ -459,6 +566,16 @@ public class DefaultResultSetHandler implements ResultSetHandler {
     return foundValues;
   }
 
+  /**
+   * 获取字段值
+   * @param rs
+   * @param metaResultObject
+   * @param propertyMapping
+   * @param lazyLoader
+   * @param columnPrefix
+   * @return
+   * @throws SQLException
+   */
   private Object getPropertyMappingValue(ResultSet rs, MetaObject metaResultObject, ResultMapping propertyMapping, ResultLoaderMap lazyLoader, String columnPrefix)
       throws SQLException {
     if (propertyMapping.getNestedQueryId() != null) {
@@ -584,15 +701,33 @@ public class DefaultResultSetHandler implements ResultSetHandler {
   // INSTANTIATION & CONSTRUCTOR MAPPING
   //
 
+  /**
+   *  根据resultmap的配置，创建resultset的pojo或者pojo的代理对象
+   *       pojo得到代理出现的场合是：懒加载导致的子查询在需要真正getValue的时候才会触发子查询，所以会被代理
+   * @param rsw
+   * @param resultMap
+   * @param lazyLoader
+   * @param columnPrefix
+   * @return
+   * @throws SQLException
+   */
   private Object createResultObject(ResultSetWrapper rsw, ResultMap resultMap, ResultLoaderMap lazyLoader, String columnPrefix) throws SQLException {
     this.useConstructorMappings = false; // reset previous mapping result
     final List<Class<?>> constructorArgTypes = new ArrayList<>();
     final List<Object> constructorArgs = new ArrayList<>();
+    /**
+     * 生成pojo实例。还没有值
+     */
     Object resultObject = createResultObject(rsw, resultMap, constructorArgTypes, constructorArgs, columnPrefix);
+
     if (resultObject != null && !hasTypeHandlerForResultObject(rsw, resultMap.getType())) {
       final List<ResultMapping> propertyMappings = resultMap.getPropertyResultMappings();
+      // 这一步遍历resultmap的每一个resultset设定就是为了查看是否有懒加载，如果有则会生成pojo的代理对象，屏蔽懒加载科目
       for (ResultMapping propertyMapping : propertyMappings) {
         // issue gcode #109 && issue #149
+        /**
+         * 如果是嵌套 懒加载（）的，则会根据全局代理工厂配置生成pojo的代理对象
+         */
         if (propertyMapping.getNestedQueryId() != null && propertyMapping.isLazy()) {
           resultObject = configuration.getProxyFactory().createProxy(resultObject, lazyLoader, configuration, objectFactory, constructorArgTypes, constructorArgs);
           break;
@@ -603,18 +738,38 @@ public class DefaultResultSetHandler implements ResultSetHandler {
     return resultObject;
   }
 
+  /**
+   * 创建 pojo 实例
+   * @param rsw
+   * @param resultMap
+   * @param constructorArgTypes
+   * @param constructorArgs
+   * @param columnPrefix
+   * @return
+   * @throws SQLException
+   */
   private Object createResultObject(ResultSetWrapper rsw, ResultMap resultMap, List<Class<?>> constructorArgTypes, List<Object> constructorArgs, String columnPrefix)
       throws SQLException {
+    // pojo的类对象
     final Class<?> resultType = resultMap.getType();
+    // 封装成MetaClass对象
     final MetaClass metaType = MetaClass.forClass(resultType, reflectorFactory);
     final List<ResultMapping> constructorMappings = resultMap.getConstructorResultMappings();
+    //1. 有resultset的类型处理器的时候
     if (hasTypeHandlerForResultObject(rsw, resultType)) {
       return createPrimitiveResultObject(rsw, resultMap, columnPrefix);
     } else if (!constructorMappings.isEmpty()) {
+      // 2. 构造方法的时候
       return createParameterizedResultObject(rsw, resultType, constructorMappings, constructorArgTypes, constructorArgs, columnPrefix);
     } else if (resultType.isInterface() || metaType.hasDefaultConstructor()) {
+      /**
+       * 3. pojo类型是接口或者pojo有默认构造方法。基本一般pojo都是走这里
+       */
       return objectFactory.create(resultType);
     } else if (shouldApplyAutomaticMappings(resultMap, false)) {
+      /**
+       * 4. 自动映射
+       */
       return createByConstructorSignature(rsw, resultType, constructorArgTypes, constructorArgs);
     }
     throw new ExecutorException("Do not know how to create an instance of " + resultType);
@@ -647,14 +802,25 @@ public class DefaultResultSetHandler implements ResultSetHandler {
     return foundValues ? objectFactory.create(resultType, constructorArgTypes, constructorArgs) : null;
   }
 
+  /**
+   * 通过方法签名创建pojo
+   * @param rsw
+   * @param resultType
+   * @param constructorArgTypes
+   * @param constructorArgs
+   * @return
+   * @throws SQLException
+   */
   private Object createByConstructorSignature(ResultSetWrapper rsw, Class<?> resultType, List<Class<?>> constructorArgTypes, List<Object> constructorArgs) throws SQLException {
     final Constructor<?>[] constructors = resultType.getDeclaredConstructors();
     final Constructor<?> defaultConstructor = findDefaultConstructor(constructors);
     if (defaultConstructor != null) {
+      // 使用默认的构造函数创建pojo并填充属性
       return createUsingConstructor(rsw, resultType, constructorArgTypes, constructorArgs, defaultConstructor);
     } else {
       for (Constructor<?> constructor : constructors) {
         if (allowedConstructorUsingTypeHandlers(constructor, rsw.getJdbcTypes())) {
+          // 通过自定义的构造函数实例化并填充
           return createUsingConstructor(rsw, resultType, constructorArgTypes, constructorArgs, constructor);
         }
       }
@@ -662,8 +828,19 @@ public class DefaultResultSetHandler implements ResultSetHandler {
     throw new ExecutorException("No constructor found in " + resultType.getName() + " matching " + rsw.getClassNames());
   }
 
+  /**
+   * 通过构造函数实例化pojo，并有resultset填充属性，反射
+   * @param rsw
+   * @param resultType
+   * @param constructorArgTypes
+   * @param constructorArgs
+   * @param constructor
+   * @return
+   * @throws SQLException
+   */
   private Object createUsingConstructor(ResultSetWrapper rsw, Class<?> resultType, List<Class<?>> constructorArgTypes, List<Object> constructorArgs, Constructor<?> constructor) throws SQLException {
     boolean foundValues = false;
+    // 将resultset每一个字段转化，封装成映射，将作为构造函数的入参
     for (int i = 0; i < constructor.getParameterTypes().length; i++) {
       Class<?> parameterType = constructor.getParameterTypes()[i];
       String columnName = rsw.getColumnNames().get(i);
@@ -673,6 +850,7 @@ public class DefaultResultSetHandler implements ResultSetHandler {
       constructorArgs.add(value);
       foundValues = value != null || foundValues;
     }
+    // 通过pojo创建工厂进行实例化
     return foundValues ? objectFactory.create(resultType, constructorArgTypes, constructorArgs) : null;
   }
 
@@ -813,6 +991,15 @@ public class DefaultResultSetHandler implements ResultSetHandler {
   // DISCRIMINATOR
   //
 
+  /**
+   * 判别最终要使用的resultmap是哪个
+   * 一般就是闯入的resultmap
+   * @param rs
+   * @param resultMap
+   * @param columnPrefix
+   * @return
+   * @throws SQLException
+   */
   public ResultMap resolveDiscriminatedResultMap(ResultSet rs, ResultMap resultMap, String columnPrefix) throws SQLException {
     Set<String> pastDiscriminators = new HashSet<>();
     Discriminator discriminator = resultMap.getDiscriminator();

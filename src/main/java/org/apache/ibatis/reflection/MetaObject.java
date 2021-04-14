@@ -1,5 +1,5 @@
 /**
- *    Copyright 2009-2019 the original author or authors.
+ *    Copyright 2009-2021 the original author or authors.
  *
  *    Licensed under the Apache License, Version 2.0 (the "License");
  *    you may not use this file except in compliance with the License.
@@ -123,6 +123,11 @@ public class MetaObject {
     }
   }
 
+  /**
+   * 设置pojo属性
+   * @param name
+   * @param value
+   */
   public void setValue(String name, Object value) {
     PropertyTokenizer prop = new PropertyTokenizer(name);
     if (prop.hasNext()) {
@@ -137,6 +142,7 @@ public class MetaObject {
       }
       metaValue.setValue(prop.getChildren(), value);
     } else {
+      // 通过pojo的wrapper对象 反射设置属性
       objectWrapper.set(prop, value);
     }
   }

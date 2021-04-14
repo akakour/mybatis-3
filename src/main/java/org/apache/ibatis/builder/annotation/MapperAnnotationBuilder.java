@@ -1,5 +1,5 @@
 /**
- *    Copyright 2009-2019 the original author or authors.
+ *    Copyright 2009-2021 the original author or authors.
  *
  *    Licensed under the Apache License, Version 2.0 (the "License");
  *    you may not use this file except in compliance with the License.
@@ -123,19 +123,32 @@ public class MapperAnnotationBuilder {
     this.type = type;
   }
 
+  /**
+   * 解析mapper
+   */
   public void parse() {
     String resource = type.toString();
     if (!configuration.isResourceLoaded(resource)) {
+      // 加载映射文件，优先从mapper同级目录加载，其次从classpath下面加载
       loadXmlResource();
+      // 设置已经加载
       configuration.addLoadedResource(resource);
+      // 设置正在加载
       assistant.setCurrentNamespace(type.getName());
+      // 解析mapper接口文件的@CacheNamespace
       parseCache();
+      // 解析mapper接口的@CacheNamespaceRef
       parseCacheRef();
+      // 得到mapper接口的所有方法
       Method[] methods = type.getMethods();
       for (Method method : methods) {
         try {
           // issue #237
+          /**
+           * 轮训所有方法
+           */
           if (!method.isBridge()) {
+            // 解析statement
             parseStatement(method);
           }
         } catch (IncompleteElementException e) {
@@ -161,22 +174,28 @@ public class MapperAnnotationBuilder {
     }
   }
 
+  /**
+   * 从mapper接口类 找到相对应的xml文件进行加载xml
+   */
   private void loadXmlResource() {
     // Spring may not know the real resource name so we check a flag
     // to prevent loading again a resource twice
     // this flag is set at XMLMapperBuilder#bindMapperForNamespace
     if (!configuration.isResourceLoaded("namespace:" + type.getName())) {
+      // 优先在同一届目录 xml和mapper同一文件夹
       String xmlResource = type.getName().replace('.', '/') + ".xml";
-      // #1347
+      // #1347 优先从与mapper接口类同一目录找xml文件
       InputStream inputStream = type.getResourceAsStream("/" + xmlResource);
       if (inputStream == null) {
         // Search XML mapper that is not in the module but in the classpath.
         try {
+          // mapper xml文件不和mapper类同一目录，则去classpath下找
           inputStream = Resources.getResourceAsStream(type.getClassLoader(), xmlResource);
         } catch (IOException e2) {
           // ignore, resource is not required
         }
       }
+       // 找到mapper.xml文件，则进行xml解析
       if (inputStream != null) {
         XMLMapperBuilder xmlParser = new XMLMapperBuilder(inputStream, assistant.getConfiguration(), xmlResource, configuration.getSqlFragments(), type.getName());
         xmlParser.parse();
@@ -184,6 +203,9 @@ public class MapperAnnotationBuilder {
     }
   }
 
+  /**
+   * 解析 mapper接口上面的@CacheNamespace注解
+   */
   private void parseCache() {
     CacheNamespace cacheDomain = type.getAnnotation(CacheNamespace.class);
     if (cacheDomain != null) {
@@ -206,6 +228,9 @@ public class MapperAnnotationBuilder {
     return props;
   }
 
+  /**
+   * 解析mapper接口上面的@CacheNamespaceRef注解
+   */
   private void parseCacheRef() {
     CacheNamespaceRef cacheDomainRef = type.getAnnotation(CacheNamespaceRef.class);
     if (cacheDomainRef != null) {
@@ -296,11 +321,17 @@ public class MapperAnnotationBuilder {
     return null;
   }
 
+  /**
+   * 解析注解版的 statement
+   * @param method
+   */
   void parseStatement(Method method) {
     Class<?> parameterTypeClass = getParameterType(method);
     LanguageDriver languageDriver = getLanguageDriver(method);
+    // 注解版mybatis的解析，生成sqlsource对象，可能是动态的也可以是静态的
     SqlSource sqlSource = getSqlSourceFromAnnotations(method, parameterTypeClass, languageDriver);
     if (sqlSource != null) {
+      // 如果是注解版的SQL，处理@Options注解
       Options options = method.getAnnotation(Options.class);
       final String mappedStatementId = type.getName() + "." + method.getName();
       Integer fetchSize = null;
@@ -329,6 +360,7 @@ public class MapperAnnotationBuilder {
           keyColumn = options.keyColumn();
         }
       } else {
+        // 空实现
         keyGenerator = NoKeyGenerator.INSTANCE;
       }
 
@@ -465,16 +497,28 @@ public class MapperAnnotationBuilder {
     return returnType;
   }
 
+  /**
+   * 从mapper接口类方法生成sqlsource对象
+   *     ---> 注解版的mybatis
+   * @param method
+   * @param parameterType
+   * @param languageDriver
+   * @return
+   */
   private SqlSource getSqlSourceFromAnnotations(Method method, Class<?> parameterType, LanguageDriver languageDriver) {
     try {
+      // 判断方法上是否有@Select @Insert @Update @Delete注解
       Class<? extends Annotation> sqlAnnotationType = getSqlAnnotationType(method);
+      // 判断是否有@SelectProvider @InsertProvider @UpdateProvider @DeleteProvider注解
       Class<? extends Annotation> sqlProviderAnnotationType = getSqlProviderAnnotationType(method);
       if (sqlAnnotationType != null) {
         if (sqlProviderAnnotationType != null) {
           throw new BindingException("You cannot supply both a static SQL and SqlProvider to method named " + method.getName());
         }
         Annotation sqlAnnotation = method.getAnnotation(sqlAnnotationType);
+        // 获取value的值
         final String[] strings = (String[]) sqlAnnotation.getClass().getMethod("value").invoke(sqlAnnotation);
+        // 生成sqlsource对象
         return buildSqlSourceFromStrings(strings, parameterType, languageDriver);
       } else if (sqlProviderAnnotationType != null) {
         Annotation sqlProviderAnnotation = method.getAnnotation(sqlProviderAnnotationType);
@@ -488,10 +532,12 @@ public class MapperAnnotationBuilder {
 
   private SqlSource buildSqlSourceFromStrings(String[] strings, Class<?> parameterTypeClass, LanguageDriver languageDriver) {
     final StringBuilder sql = new StringBuilder();
+    // 拼接sql
     for (String fragment : strings) {
       sql.append(fragment);
       sql.append(" ");
     }
+    // 生成sqlsource对象
     return languageDriver.createSqlSource(configuration, sql.toString().trim(), parameterTypeClass);
   }
 

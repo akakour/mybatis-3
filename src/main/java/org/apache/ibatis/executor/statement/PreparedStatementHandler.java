@@ -1,5 +1,5 @@
 /**
- *    Copyright 2009-2018 the original author or authors.
+ *    Copyright 2009-2021 the original author or authors.
  *
  *    Licensed under the Apache License, Version 2.0 (the "License");
  *    you may not use this file except in compliance with the License.
@@ -58,10 +58,24 @@ public class PreparedStatementHandler extends BaseStatementHandler {
     ps.addBatch();
   }
 
+  /**
+   *  执行sql
+   * @param statement
+   * @param resultHandler
+   * @param <E>
+   * @return
+   * @throws SQLException
+   */
   @Override
   public <E> List<E> query(Statement statement, ResultHandler resultHandler) throws SQLException {
     PreparedStatement ps = (PreparedStatement) statement;
+    /**
+     * 调用原生jdbc的方法执行
+     */
     ps.execute();
+    /**
+     * 结果集设定
+     */
     return resultSetHandler.handleResultSets(ps);
   }
 
@@ -72,6 +86,12 @@ public class PreparedStatementHandler extends BaseStatementHandler {
     return resultSetHandler.handleCursorResultSets(ps);
   }
 
+  /**
+   * mode=perpare的 statement对象生成
+   * @param connection
+   * @return
+   * @throws SQLException
+   */
   @Override
   protected Statement instantiateStatement(Connection connection) throws SQLException {
     String sql = boundSql.getSql();
@@ -89,6 +109,13 @@ public class PreparedStatementHandler extends BaseStatementHandler {
     }
   }
 
+  /**
+   * 预编译参数绑定
+   *   ---> ps.setXXX(index,value)
+   *   策略模式，参数类型推断得出是setString还是setInterage。。。
+   * @param statement
+   * @throws SQLException
+   */
   @Override
   public void parameterize(Statement statement) throws SQLException {
     parameterHandler.setParameters((PreparedStatement) statement);
